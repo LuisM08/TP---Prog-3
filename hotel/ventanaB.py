@@ -1,124 +1,218 @@
-from entidades import tipos_habitacion, estadias
+from entidades import conectar_bd,tipos_habitacion, estadias, ingresos
 from tkinter import *
 import tkinter as tk
-import customtkinter as ctk
 from tkinter import ttk
 from tkinter import messagebox
-from sqlalchemy import create_engine, Column, String, Integer, Float, ForeignKey,CHAR
+from sqlalchemy import create_engine, Column, String, Integer, Float, ForeignKey
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
 import mysql.connector
 
-Base = declarative_base()
-
-class Estadia(Base):
-    __tablename__ = 'estadias'
-
-    id_estadia = Column(Integer, primary_key=True)
-    total_monto = Column(Float)
-    forma_pago = Column(Integer)
-    dia_estadia = Column(Integer)
-    estado = Column(CHAR(10))
-    id_tipo_habitacion = Column(Integer, ForeignKey('tipos_habitacion.id_tipo_habitacion'))
-    numero = Column(Integer)
-
-## Conectar a la base de datos
-#conexion = mysql.connector.connect(
-#                host="localhost",
-#                user="root",
-#                password="",
-#                database="hotel"
-#            )
-#
-#engine = create_engine('mysql+pymysql://root@localhost/hotel')
-#Base.metadata.create_all(engine)
-#Session = sessionmaker(bind=engine)
+#Base = declarative_base()
+#session = conectar_bd()
 
 class ventanaB(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
 
         self.title("Cargar estadias")
-        ctk.set_appearance_mode("light")
 
-        ctk.CTkLabel(self, text="Nro. Habitacion").grid(row=3, column=0, padx=10, pady=5)
-        ctk.CTkLabel(self, text="Dias de estadia").grid(row=4, column=0, padx=10, pady=5)
+        self.session = conectar_bd()
 
-        self.caja1 = ctk.CTkEntry(self)
-        self.caja1.grid(row=3, column=1, padx=10, pady=10)
-        self.caja2 = ctk.CTkEntry(self)
-        self.caja2.grid(row=4, column=1, padx=10, pady=10)
+        self.label = Label(self, text="Nro. Habitacion")
+        self.label.grid(row=0, column=0, padx=5, pady=10)
+          # Ajusta el espaciado aquí
+        self.label = Label(self, text="Dias de estadia")
+        self.label.grid(row=1, column=0, padx=5, pady=10)  # Ajusta el espaciado aquí
+
+        self.caja1 = tk.Entry(self)
+        self.caja1.grid(row=0, column=1, padx=5, pady=10)
+          # Ajusta el espaciado aquí
+        self.caja2 = tk.Entry(self)
+        self.caja2.grid(row=1, column=1, padx=5, pady=10)  # Ajusta el espaciado aquí
+
+        self.tabla_rooms = ttk.Treeview(self, columns=("id", "Tipo de Habitacion", "Costo por día"), show="headings")
+        self.tabla_rooms.heading("id", text="ID")
+        self.tabla_rooms.heading("Tipo de Habitacion", text="Tipo de Habitacion")
+        self.tabla_rooms.heading("Costo por día", text="Costo por día")
+        self.tabla_rooms.grid(row=0, column=2, columnspan=4, padx=1, pady=2)  # Ajusta el espaciado aquí
+
+        self.obtener_datos_tipos_hab()
 
         self.agregar_btn = tk.Button(self, text="Cargar", command=self.cargar)
-        self.agregar_btn.grid(row=6, column=0, padx=5, pady=5)
+        self.agregar_btn.grid(row=6, column=0, padx=10, pady=5)  # Ajusta el espaciado aquí
 
         self.editar_btn = tk.Button(self, text="Modificar", command=self.modificar)
-        self.editar_btn.grid(row=6, column=1, padx=5, pady=5)
+        self.editar_btn.grid(row=6, column=1, padx=10, pady=5)  # Ajusta el espaciado aquí
 
         self.borrar_btn = tk.Button(self, text="Borrar", command=self.borrar)
-        self.borrar_btn.grid(row=6, column=2, padx=5, pady=5)
+        self.borrar_btn.grid(row=6, column=2, padx=10, pady=5)  # Ajusta el espaciado aquí
 
-        self.tabla_habitaciones = ttk.Treeview(self, columns=("ID", "Número de Habitación", "Tipo de Habitación", "Costo Diario", "Días de Estadía", "Sub-Total", "Descuento", "Total"), show="headings")
+        self.finalizar_btn = tk.Button(self, text="Finalizar", command=self.finalizar)
+        self.finalizar_btn.grid(row=6, column=4, padx=10, pady=5)  # Ajusta el espaciado aquí
+
+        self.tabla_habitaciones = ttk.Treeview(self, columns=("ID", "Número", "Tipo", "Costo", "Días", "Sub-Total", "Descuento", "Total"), show="headings")
         self.tabla_habitaciones.heading("ID", text="ID")
-        self.tabla_habitaciones.heading("Número de Habitación", text="Número de Habitación")
-        self.tabla_habitaciones.heading("Tipo de Habitación", text="Tipo de Habitación")
-        self.tabla_habitaciones.heading("Costo Diario", text="Costo Diario")
-        self.tabla_habitaciones.heading("Días de Estadía", text="Días de Estadía")
+        self.tabla_habitaciones.heading("Número", text="Número")
+        self.tabla_habitaciones.heading("Tipo", text="Tipo")
+        self.tabla_habitaciones.heading("Costo", text="Costo")
+        self.tabla_habitaciones.heading("Días", text="Días")
         self.tabla_habitaciones.heading("Sub-Total", text="Sub-Total")
         self.tabla_habitaciones.heading("Descuento", text="% Descuento")
         self.tabla_habitaciones.heading("Total", text="Total")
-        self.tabla_habitaciones.grid(row=0, column=0, columnspan=7, padx=5, pady=5,)
+        self.tabla_habitaciones.grid(row=7, column=0, columnspan=10, padx=5, pady=5)  # Ajusta el espaciado aquí
 
-        self.op1 = tk.StringVar()
-        self.op1.set("a")
-        self.sm = tk.Radiobutton(self, text="Crédito", variable=self.op1, value="a")
-        self.sm.grid(row=3, column=2)
-        self.sf = tk.Radiobutton(self, text="Contado", variable=self.op1, value="b")
-        self.sf.grid(row=4, column=2)
+        self.op1 = tk.IntVar()
+        self.sm = tk.Radiobutton(self, text="Crédito", variable=self.op1, value=1)
+        self.sm.grid(row=5, column=0, padx=5, pady=5)  # Ajusta el espaciado aquí
+        self.sf = tk.Radiobutton(self, text="Contado", variable=self.op1, value=0)
+        self.sf.grid(row=5, column=1, padx=5, pady=5)  # Ajusta el espaciado aquí
 
-        self.obtener_datos()
+        self.obtener_datos_estadias()
 
-    def obtener_datos(self):
-        habitaciones = self.session.query(estadias).filter_by(estado="en uso")
-        for habitacion in habitaciones:
-            self.tabla_habitaciones.insert("","end",values=(habitacion.id_estadia, habitacion.numero, habitacion.tipo, habitacion.costo, habitacion.dias,
-                habitacion.subtotal, habitacion.descuento, habitacion.total))
+    def obtener_datos_tipos_hab(self):
+        rooms = self.session.query(tipos_habitacion).all()
+        for room in rooms:
+            self.tabla_rooms.insert("", "end", values=(room.id_tipo_habitacion, room.tipo_habitacion, room.costo_diario))
+
+    def obtener_datos_estadias(self):
+        Estadias = self.session.query(estadias).filter_by(estado="ocupado").all()
+        for Estadia in Estadias:
+            id_tipo = self.session.query(tipos_habitacion).filter_by(id_tipo_habitacion=Estadia.id_tipo_habitacion).first()
+            self.tabla_habitaciones.insert("","end",values=(Estadia.id_estadia, Estadia.numero, id_tipo.tipo_habitacion, id_tipo.costo_diario, Estadia.dia_estadia, Estadia.subtot, Estadia.descuento, Estadia.total_monto ))
 
     def cargar(self):
         numero_habitacion = self.caja1.get()
-        dias_estadia = int(self.caja2.get())
-        tipo_habitacion = self.session.query(tipos_habitacion).filter_by(tipo_habitacion=self.tipo.get()).first()
-        costo_diario = tipo_habitacion.costo_diario
-        subtotal = costo_diario * dias_estadia
-        descuento = 0.0
-        if dias_estadia > 5:
-            descuento += 0.05
-        if dias_estadia > 10:
-            descuento += 0.02
+        dias_estadia = float(self.caja2.get())
+        item_seleccionado = self.tabla_rooms.focus()
         metodo_pago = self.op1.get()
+        costo_diario = float(self.tabla_rooms.item(item_seleccionado)['values'][2])
+        tipo_habitacion = self.tabla_rooms.item(item_seleccionado)['values'][0]
+        
 
-        if metodo_pago == "a":  # Crédito
-            descuento += 0.05
-        else:  # Contado
-            descuento += 0.1
+        Estadias = self.session.query(estadias).filter_by(numero=numero_habitacion).first()
+        if Estadias:
+            if Estadias.estado == "ocupado" or Estadias.estado == "libre":
 
-        total = subtotal * (1 - descuento)
+                room_ingresos = self.session.query(ingresos).filter_by(id_tipo_habitacion=Estadias.id_tipo_habitacion).first()
+                room_ingresos.ingresos = room_ingresos.ingresos + Estadias.total_monto
+                room_ingresos.dias_ocupacion = room_ingresos.dias_ocupacion + Estadias.dia_estadia
 
-        nueva_estadia = estadias(numero=numero_habitacion, tipo=tipo_habitacion.tipos_habitacion, costo=costo_diario, dias=dias_estadia, subtotal=subtotal,
-                                      descuento=descuento, total=total)
-        self.session.add(nueva_estadia)
-        self.session.commit()
-        self.tabla_habitaciones.insert("", "end", values=(
-            nueva_estadia.id, nueva_estadia.numero, nueva_estadia.tipo, nueva_estadia.costo,
-            nueva_estadia.dias, nueva_estadia.subtotal, nueva_estadia.descuento, nueva_estadia.total))
+                self.session.commit()
+
+                Estadias.forma_pago = metodo_pago
+                Estadias.dia_estadia = dias_estadia
+                Estadias.id_tipo_habitacion = tipo_habitacion
+                Estadias.estado = "ocupado"
+                descuento = self.descuento()
+                Estadias.descuento = descuento
+                subtotal = costo_diario * dias_estadia
+                Estadias.subtot = subtotal
+                total = subtotal - (subtotal * descuento)
+                Estadias.total_monto = total
+                self.session.commit()
+                filas = self.tabla_habitaciones.get_children()[0:]
+                for fila in filas:
+                    self.tabla_habitaciones.delete(filas)
+                self.obtener_datos_estadias()
+            
+
+
+        elif numero_habitacion and dias_estadia and item_seleccionado and metodo_pago:
+            
+            estado = 'ocupado'
+            
+            subtotal = (costo_diario * dias_estadia)
+            print(subtotal)
+            subtotal = float (subtotal)
+            print(subtotal)
+            
+            descuento = self.descuento()
+            total = subtotal - (descuento * subtotal)
+            nueva_estadia = estadias(numero=numero_habitacion, dia_estadia=dias_estadia, subtot=subtotal,
+                                      descuento=descuento, total_monto=total, forma_pago=metodo_pago, estado=estado, id_tipo_habitacion=tipo_habitacion)
+            self.session.add(nueva_estadia)
+            self.session.commit()
+            self.tabla_habitaciones.insert("", "end", values=(
+                nueva_estadia.id_estadia, numero_habitacion, tipo_habitacion, costo_diario,
+                dias_estadia, subtotal, descuento, total))
+        else:
+            messagebox.showerror("Error", "Verifique los datos para continuar.")
+
+    def descuento(self):
+        dias_estadia = int(self.caja2.get())
+        metodo_pago = self.op1.get()
+        descuento = 0.0
+        if metodo_pago == 1:
+            if dias_estadia > 5 :
+                descuento += 0.05
+        else:
+            descuento += 0.10
+
+        if dias_estadia >10:
+            descuento += 0.02
+        
+        return descuento
 
     def modificar(self):
-        n = int(self.caja1.get())   
+           
+            item_seleccionado = self.tabla_habitaciones.focus()
+            id_est = self.tabla_habitaciones.item(item_seleccionado)['values'][0]
+            costo = self.tabla_habitaciones.item(item_seleccionado)['values'][3]
+            new_day = self.caja2.get()
+            estadias = self.session.query(estadias).filter_by(id_estadia=id_est).first()
+            pay = estadias.forma_pago
+            descuento = 0.0
+            if pay == 1:
+                if new_day > 5 :
+                    descuento += 0.05
+            else:
+                descuento += 0.10
+ 
+            if new_day > 10:
+                descuento += 0.02
+            
+            subtotal = costo * new_day
+            total = subtotal - (descuento * subtotal)
+            
+            estadias.dia_estadia = new_day
+            estadias.descuento = descuento
+            estadias.subtot = subtotal
+            estadias.total_monto = total
+
+            self.session.commit()
+
+
 
     def borrar(self):
-        n = int(self.caja1.get())
+        item_seleccionado = self.tabla_habitaciones.focus()
+        if item_seleccionado:
+            id_est = self.tabla_habitaciones.item(item_seleccionado)['values'][0]
+            room_borrar = self.session.query(estadias).filter_by(id_estadia=id_est).first()
 
-if __name__ == "__main__":
-    app = ventanaB()
-    app.mainloop()
+            self.session.delete(room_borrar)
+            self.session.commit()
+            self.tabla_habitaciones.delete(item_seleccionado)
+        else:
+            messagebox.showerror("Error", "Seleccione una habitacion para borrar.")
+
+
+    def finalizar(self):
+        item_seleccionado = self.tabla_habitaciones.focus()
+        if item_seleccionado:
+            id_est = self.tabla_habitaciones.item(item_seleccionado)['values'][0]
+            room_finalizar = self.session.query(estadias).filter_by(id_estadia=id_est).first()
+            room_finalizar.estado = "libre"
+
+            self.session.commit()
+            self.tabla_habitaciones.delete(item_seleccionado)
+
+            room_ingresos = self.session.query(ingresos).filter_by(id_tipo_habitacion=room_finalizar.id_tipo_habitacion).first()
+            room_ingresos.ingresos = room_ingresos.ingresos + room_finalizar.total_monto
+            room_ingresos.dias_ocupacion = room_ingresos.dias_ocupacion + room_finalizar.dia_estadia
+
+            self.session.commit()
+        else:
+            messagebox.showerror("Error", "Seleccione una habitacion para finalizar estadia.")
+

@@ -1,23 +1,12 @@
-from entidades import conectar_bd, tipos_habitacion, ingresos
+from entidades import conectar_bd, conectar, tipos_habitacion, ingresos
 from tkinter import *
 import tkinter as tk
 from tkinter import ttk
-
 from tkinter import messagebox
 from sqlalchemy import create_engine, Column, String, Integer, Float, ForeignKey
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
-import mysql.connector
-
-# Conectar a la base de datos
-conexion = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                password="",
-                database="hotel"
-            )
-
 
 session = conectar_bd()
 
@@ -68,6 +57,9 @@ class win(tk.Toplevel):
             new_room = tipos_habitacion(tipo_habitacion=tipo, costo_diario=costo)
             self.session.add(new_room)
             self.session.commit()
+            new_ingreso = ingresos(ingresos=0, dias_ocupacion=0, id_tipo_habitacion=new_room.id_tipo_habitacion)
+            self.session.add(new_ingreso)
+            self.session.commit()
             self.tabla_rooms.insert("", "end", values=(new_room.id_tipo_habitacion, tipo, costo))
             self.tipo.delete(0, tk.END)
             self.costo.delete(0, tk.END)
@@ -79,6 +71,7 @@ class win(tk.Toplevel):
         if item_seleccionado:
             id_room = self.tabla_rooms.item(item_seleccionado)['values'][0]
 
+            conexion = conectar()
             # room_borrar = self.session.query(tipos_habitacion).filter_by(id_tipo_habitacion=id_room).first()
             # room_borrar = self.session.query(tipos_habitacion).filter(tipos_habitacion.id_tipo_habitacion == id_room).first()
             # room_borrar = self.session.query(tipos_habitacion).get(id_room)
@@ -87,6 +80,9 @@ class win(tk.Toplevel):
             cursor = conexion.cursor()
 
             sql = "DELETE FROM tipos_habitacion WHERE id_tipo_habitacion = %s"
+            valores = (id_room, )
+            cursor.execute(sql, valores)
+            sql = "DELETE FROM ingresos WHERE id_tipo_habitacion = %s"
             valores = (id_room, )
             cursor.execute(sql, valores)
             conexion.commit()
